@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Reversi Chess</title>
+  <link rel="stylesheet" href="chessboard/css/chessboard-1.0.0.min.css">
+  <script src="https://code.jquery.com/jquery-1.12.4.min.js"></script>
+  <script src="chessboard/js/chessboard-1.0.0.min.js"></script>
+  <script src="chess/chess.js"></script>
+
+</head>
+
+<body style="background-color:rgb(50, 211, 157)">
+  <div id="myBoard" style="width: 800px"></div>
+  <label style="font-family:verdana; text-align:center">Status:</label>
+  <div id="status"></div>
+  <label style="font-family:verdana; text-align:center">PGN:</label>
+  <div id="pgn"></div>
+  <div style="text-align: right;">
+    <script>
+      var board = null
+      var game = new Chess()
+      var $status = $('#status')
+      var $pgn = $('#pgn')
+      var notation = [];
+
+      function onDragStart(source, piece, position, orientation) {
+
+        // do not pick up pieces if the game is over
+        if (game.game_over()) return false
+
+        // only pick up pieces for the side to move
+        if ((game.turn() === 'w' && piece.search(/^b/) !== -1) ||
+          (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
+          return false
+        }
+      }
+
+      function onDrop(source, target) {
+        // see if the move is legal
+
+        var move = game.move({
+          from: source,
+          to: target,
+          promotion: 'q' // NOTE: always promote to a queen for example simplicity
+        })
+        if (move === null) return 'snapback'
+
+        updateStatus(source, target)
+
+      }
+
+      // update the board position after the piece snap
+      // for castling, en passant, pawn promotion
+      function onSnapEnd() {
+        board.position(game.fen())
+      }
+
+      function updateStatus(source, target) {
+        var pieceType = game.get(target).type.toUpperCase()
+        var entry = source + target
+        if (game.turn() == 'b') {
+          if (pieceType == "P") {
+            notation.push((notation.length + 1) + ". " + entry + " ")
+          }
+          else {
+            notation.push((notation.length + 1) + ". " + pieceType + entry + " ")
+          }
+        }
+        else {
+          if (pieceType == "P") {
+            notation[notation.length - 1] = notation[notation.length - 1] + entry + "<br/>"
+          }
+          else {
+            notation[notation.length - 1] = notation[notation.length - 1] + pieceType + entry + "<br/>"
+          }
+        }
+
+
+        var status = ''
+        console.log(game.turn())
+        var moveColor = 'White'
+        if (game.turn() == 'b') {
+          moveColor = 'Black'
+        }
+
+        console.log(moveColor)
+        // checkmate?
+        if (game.game_over()) {
+          status = 'Game over, ' + moveColor + ' lost their king.'
+        }
+
+        // game still on
+        else {
+          status = moveColor + ' to move'
+        }
+
+        $status.html(status)
+        $pgn.html(notation)
+      }
+
+      var config = {
+        draggable: true,
+        position: 'start',
+        onDragStart: onDragStart,
+        onDrop: onDrop,
+        onSnapEnd: onSnapEnd
+      };
+      board = Chessboard('myBoard', config)
+
+      updateStatus()
+    </script>
+  </div>
+</body>
+
+</html>
