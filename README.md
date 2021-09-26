@@ -13,4 +13,4 @@ A flip happens if a move causes there to be two pieces of the same color with a 
 
 ## 
 
-Uses [chessboard.js])(https://github.com/oakmac/chessboardjs/) and [chess.js](https://github.com/jhlywa/chess.js)
+Uses [chessboard.js](https://github.com/oakmac/chessboardjs/) and [chess.js](https://github.com/jhlywa/chess.js)
