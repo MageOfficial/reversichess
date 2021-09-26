@@ -10,3 +10,7 @@ Special cases:
 There currently is no check/checkmate so the game ends when you capture or flip the opponents king.
 
 A flip happens if a move causes there to be two pieces of the same color with a solid line of opposite color pieces in between them, the pieces in between flip colors to be the same color as the surrounding pieces.
+
+## 
+
+Uses [chessboard.js])(https://github.com/oakmac/chessboardjs/) and [chess.js](https://github.com/jhlywa/chess.js)
