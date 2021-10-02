@@ -12,116 +12,241 @@
 </head>
 
 <body style="background-color:rgb(50, 211, 157)">
-  <div id="myBoard" style="width: 800px"></div>
-  <label style="font-family:verdana; text-align:center">Status:</label>
-  <div id="status"></div>
-  <label style="font-family:verdana; text-align:center">PGN:</label>
-  <div id="pgn"></div>
-  <div style="text-align: right;">
-    <script>
-      var board = null
-      var game = new Chess()
-      var $status = $('#status')
-      var $pgn = $('#pgn')
-      var notation = [];
-      var socket = io();
+  <div class="page-login" id="page-login">
+    <input id='username'></input>
+    <button id='login'>Login</button>
+  </div>
 
-      socket.on('move',function (msg){
-        console.log(msg)
-        game.move(msg)
-        board.position(game.fen());
-        updateStatus(msg.from, msg.to)
-      })
+  <div class="page-lobby" id="page-lobby" style="display: none;">
+    <h1>Reversi Chess</h1>
+    <h2 id='userLabel'></h2>
+    <h3>Active games</h3>
+    <div id='gamesList'>
+      No active games
+    </div>
+    <div id="new-game">
+      <button id='new-lobby'>New Lobby</button>
+    </div>
+    <!--
+    <h3>Online players</h3>
+    
+    <div id='userList'>
+      No users online
+    </div>
+    -->
+  </div>
 
-      function onDragStart(source, piece, position, orientation) {
+  <div class="page-game" id="page-game" style="display: none;">
+    <div id="myBoard" style="width: 800px"></div>
+    <label style="font-family:verdana; text-align:center">Status:</label>
+    <div id="status"></div>
+    <label style="font-family:verdana; text-align:center">PGN:</label>
+    <div id="pgn"></div>
+    <div style="text-align: right;">
+      <script>
+        var board = null
+        var game = new Chess()
+        var $status = $('#status')
+        var $pgn = $('#pgn')
+        var notation = [];
 
-        // do not pick up pieces if the game is over
-        if (game.game_over()) return false
+        var socket = io();
+        var usersOnline = [];
+        var serverId = 0;
+        var playerColor = '';
+        //Menu
+        $('#login').on('click', function () {
+          username = $('#username').val();
 
-        // only pick up pieces for the side to move
-        if ((game.turn() === 'w' && piece.search(/^b/) !== -1) ||
-          (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
-          return false
-        }
-      }
+          if (username.length > 0) {
+            $('#userLabel').text(username);
+            socket.emit('login', username);
 
-      function onDrop(source, target) {
-        // see if the move is legal
+            $('#page-login').hide();
+            $('#page-lobby').show();
+          }
+        });
 
-        var move = game.move({
-          from: source,
-          to: target,
-          promotion: 'q' // NOTE: always promote to a queen for example simplicity
+
+        socket.on('login', function (msg) {
+          usersOnline = msg.users;
+          //updateUserList();
+
+          myGames = msg.games;
+          updateGamesList();
+        });
+
+        $('#new-lobby').on('click', function () {
+          socket.emit('newlobby', username);
+
+          $('#page-lobby').hide();
+          $('#page-game').show();
+        });
+
+        socket.on('joinlobby', function (msg) {
+          addUser(msg);
+        });
+
+        socket.on('leavelobby', function (msg) {
+          removeUser(msg);
+        });
+
+
+        var addUser = function (userId) {
+          usersOnline.push(userId);
+          //updateUserList();
+        };
+
+        var removeUser = function (userId) {
+          for (var i = 0; i < usersOnline.length; i++) {
+            if (usersOnline[i] === userId) {
+              usersOnline.splice(i, 1);
+            }
+          }
+
+          //updateUserList();
+        };
+
+        
+        var updateGamesList = function () {
+          document.getElementById('gamesList').innerHTML = '';
+          myGames.forEach(function (gameId) {
+            $('#gamesList').append($('<button>')
+              .text(gameId)
+              .on('click', function () {
+                socket.emit('resumegame', gameId);
+              }));
+          });
+        };
+        /*
+        var updateUserList = function () {
+          document.getElementById('userList').innerHTML = '';
+          usersOnline.forEach(function (user) {
+            $('#userList').append($('<button>')
+              .text(user)
+              .on('click', function () {
+                socket.emit('invite', user);
+              }));
+          });
+        };
+*/
+
+        socket.on('joingame', function (msg) {
+          console.log("joined as game id: " + msg.game.id);
+          playerColor = msg.color;
+          //initGame(msg.game);
+          serverId = msg.game.id
+          $('#page-lobby').hide();
+          $('#page-game').show();
+
+        });
+
+        socket.on('move', function (msg) {
+          console.log(msg.gameId)
+          console.log(serverId)
+          if (msg.gameId === serverId) {
+            console.log(msg)
+            game.move(msg.move)
+            board.position(game.fen());
+            updateStatus(msg.move.from, msg.move.to)
+          }
         })
-        if (move === null) return 'snapback'
 
-        else {
-          socket.emit('move', move) 
+        function onDragStart(source, piece, position, orientation) {
+
+          // do not pick up pieces if the game is over
+          if (game.game_over()) return false
+
+          // only pick up pieces for the side to move
+          if (game.turn() !== playerColor){
+            return false
+          }
+
+          if ((game.turn() === 'w' && piece.search(/^b/) !== -1) ||
+            (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
+            return false
+          }
         }
-        updateStatus(source, target)
-      }
 
-      // update the board position after the piece snap
-      // for castling, en passant, pawn promotion
-      function onSnapEnd() {
-        board.position(game.fen())
-      }
+        function onDrop(source, target) {
+          // see if the move is legal
 
-      function updateStatus(source, target) {
-        var pieceType = game.get(target).type.toUpperCase()
-        var entry = source + target
-        if (game.turn() == 'b') {
-          if (pieceType == "P") {
-            notation.push((notation.length + 1) + ". " + entry + " ")
+          var move = game.move({
+            from: source,
+            to: target,
+            promotion: 'q' // NOTE: always promote to a queen for example simplicity
+          })
+          if (move === null) return 'snapback'
+
+          else {
+
+            socket.emit('move', {move: move, gameId: serverId})
+          }
+          updateStatus(source, target)
+        }
+
+        // update the board position after the piece snap
+        // for castling, en passant, pawn promotion
+        function onSnapEnd() {
+          board.position(game.fen())
+        }
+
+        function updateStatus(source, target) {
+          var pieceType = game.get(target).type.toUpperCase()
+          var entry = source + target
+          if (game.turn() == 'b') {
+            if (pieceType == "P") {
+              notation.push((notation.length + 1) + ". " + entry + " ")
+            }
+            else {
+              notation.push((notation.length + 1) + ". " + pieceType + entry + " ")
+            }
           }
           else {
-            notation.push((notation.length + 1) + ". " + pieceType + entry + " ")
+            if (pieceType == "P") {
+              notation[notation.length - 1] = notation[notation.length - 1] + entry + "<br/>"
+            }
+            else {
+              notation[notation.length - 1] = notation[notation.length - 1] + pieceType + entry + "<br/>"
+            }
           }
-        }
-        else {
-          if (pieceType == "P") {
-            notation[notation.length - 1] = notation[notation.length - 1] + entry + "<br/>"
+
+
+          var status = ''
+          console.log(game.turn())
+          var moveColor = 'White'
+          if (game.turn() == 'b') {
+            moveColor = 'Black'
           }
+
+          console.log(moveColor)
+          // checkmate?
+          if (game.game_over()) {
+            status = 'Game over, ' + moveColor + ' lost their king.'
+          }
+
+          // game still on
           else {
-            notation[notation.length - 1] = notation[notation.length - 1] + pieceType + entry + "<br/>"
+            status = moveColor + ' to move'
           }
+
+          $status.html(status)
+          $pgn.html(notation)
         }
 
+        var config = {
+          draggable: true,
+          position: 'start',
+          onDragStart: onDragStart,
+          onDrop: onDrop,
+          onSnapEnd: onSnapEnd
+        };
+        board = Chessboard('myBoard', config)
 
-        var status = ''
-        console.log(game.turn())
-        var moveColor = 'White'
-        if (game.turn() == 'b') {
-          moveColor = 'Black'
-        }
+        updateStatus()
 
-        console.log(moveColor)
-        // checkmate?
-        if (game.game_over()) {
-          status = 'Game over, ' + moveColor + ' lost their king.'
-        }
-
-        // game still on
-        else {
-          status = moveColor + ' to move'
-        }
-
-        $status.html(status)
-        $pgn.html(notation)
-      }
-
-      var config = {
-        draggable: true,
-        position: 'start',
-        onDragStart: onDragStart,
-        onDrop: onDrop,
-        onSnapEnd: onSnapEnd
-      };
-      board = Chessboard('myBoard', config)
-
-      updateStatus()
-
-    </script>
+      </script>
+    </div>
   </div>
 </body>
 
