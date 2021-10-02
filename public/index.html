@@ -54,6 +54,7 @@
         var $pgn = $('#pgn')
         var notation = [];
 
+        var gameStart=false
         var socket = io();
         var usersOnline = [];
         var serverId = 0;
@@ -154,6 +155,7 @@
           if(playerColor=='b'){
             board.orientation('black')
             $opponent.html(msg.game.users.white)
+            gameStart=true
           }
           else{
             $opponent.html("Waiting for opponent")
@@ -162,6 +164,7 @@
         });
         socket.on('connectionmade', function (msg) {
             $opponent.html(msg.game.users.black)
+            gameStart=true
         })
 
         socket.on('move', function (msg) {
@@ -176,7 +179,7 @@
         })
 
         function onDragStart(source, piece, position, orientation) {
-
+          if (!gameStart) return false
           // do not pick up pieces if the game is over
           if (game.game_over()) return false
 

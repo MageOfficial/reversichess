@@ -9,6 +9,7 @@ const port = process.env.PORT || 8080;
 var lobbyUsers = {};
 var users = {};
 let activeGames = {};
+var lobbyNum=0;
 
 io.on('connection', function (socket) {
     console.log('new connection ' + socket);
@@ -44,11 +45,11 @@ io.on('connection', function (socket) {
 
     socket.on('newlobby', function (opponentId) {
         console.log(socket.userId + ' Made a lobby');
-
+        lobbyNum+=1;
         socket.broadcast.emit('leavelobby', socket.userId);
 
         var game = {
-            id: Math.floor((Math.random() * 100) + 1),
+            id: lobbyNum,
             board: null,
             users: { white: socket.userId, black: "" }
         };
@@ -96,9 +97,7 @@ io.on('connection', function (socket) {
             games: Object.keys(activeGames)
         });
 
-
         delete lobbyUsers[game.users.white];
-
 
         //users[game.users.white].games[game.id] = game.id;
         //users[game.users.black].games[game.id] = game.id;
