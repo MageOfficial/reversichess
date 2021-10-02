@@ -4,6 +4,7 @@
 <head>
   <title>Reversi Chess</title>
   <link rel="stylesheet" href="chessboard/css/chessboard-1.0.0.min.css">
+  <link rel="stylesheet" href="index.css">
   <script src="https://code.jquery.com/jquery-1.12.4.min.js"></script>
   <script src="chessboard/js/chessboard-1.0.0.min.js"></script>
   <script src="chess/chess.js"></script>
@@ -55,6 +56,7 @@
         var serverId = 0;
         var playerColor = '';
         //Menu
+
         $('#login').on('click', function () {
           username = $('#username').val();
 
@@ -67,11 +69,17 @@
           }
         });
 
-
         socket.on('login', function (msg) {
           usersOnline = msg.users;
           //updateUserList();
 
+          myGames = msg.games;
+          updateGamesList();
+        });
+
+        socket.on('update', function (msg) {
+          usersOnline = msg.users;
+          //updateUserList();
           myGames = msg.games;
           updateGamesList();
         });
@@ -91,7 +99,6 @@
           removeUser(msg);
         });
 
-
         var addUser = function (userId) {
           usersOnline.push(userId);
           //updateUserList();
@@ -103,7 +110,6 @@
               usersOnline.splice(i, 1);
             }
           }
-
           //updateUserList();
         };
 
@@ -114,7 +120,7 @@
             $('#gamesList').append($('<button>')
               .text(gameId)
               .on('click', function () {
-                socket.emit('resumegame', gameId);
+                socket.emit('opponentjoin', gameId);
               }));
           });
         };
@@ -136,9 +142,12 @@
           playerColor = msg.color;
           //initGame(msg.game);
           serverId = msg.game.id
+          if(playerColor=='b'){
+            board.orientation('black')
+          }
+
           $('#page-lobby').hide();
           $('#page-game').show();
-
         });
 
         socket.on('move', function (msg) {
@@ -211,7 +220,6 @@
             }
           }
 
-
           var status = ''
           console.log(game.turn())
           var moveColor = 'White'
@@ -236,6 +244,7 @@
 
         var config = {
           draggable: true,
+          orientation: playerColor,
           position: 'start',
           onDragStart: onDragStart,
           onDrop: onDrop,
