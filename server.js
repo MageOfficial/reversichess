@@ -70,7 +70,6 @@ io.on('connection', function (socket) {
             games: Object.keys(activeGames)
         });
 
-        delete lobbyUsers[game.users.white];
         //delete lobbyUsers[game.users.black];   
         console.log(activeGames)
     });
@@ -88,7 +87,7 @@ io.on('connection', function (socket) {
         game.users.black = socket.userId;
 
         lobbyUsers[game.users.black].emit('joingame', { game: game, color: 'b' });
-
+        lobbyUsers[game.users.white].emit('connectionmade', { game: game, color: 'b' });
 
         delete users[game.users.white].games[game.id]
 

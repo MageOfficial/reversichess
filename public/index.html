@@ -39,6 +39,8 @@
 
   <div class="page-game" id="page-game" style="display: none;">
     <div id="myBoard" style="width: 800px"></div>
+    <label style="font-family:verdana; text-align:center">Opponent:</label>
+    <div id="opponent"></div>
     <label style="font-family:verdana; text-align:center">Status:</label>
     <div id="status"></div>
     <label style="font-family:verdana; text-align:center">PGN:</label>
@@ -48,6 +50,7 @@
         var board = null
         var game = new Chess()
         var $status = $('#status')
+        var $opponent = $('#opponent')
         var $pgn = $('#pgn')
         var notation = [];
 
@@ -56,7 +59,7 @@
         var serverId = 0;
         var playerColor = '';
         //Menu
-
+        
         $('#login').on('click', function () {
           username = $('#username').val();
 
@@ -138,17 +141,28 @@
 */
 
         socket.on('joingame', function (msg) {
+          
           console.log("joined as game id: " + msg.game.id);
           playerColor = msg.color;
           //initGame(msg.game);
           serverId = msg.game.id
-          if(playerColor=='b'){
-            board.orientation('black')
-          }
 
           $('#page-lobby').hide();
           $('#page-game').show();
+
+          
+          if(playerColor=='b'){
+            board.orientation('black')
+            $opponent.html(msg.game.users.white)
+          }
+          else{
+            $opponent.html("Waiting for opponent")
+          }
+
         });
+        socket.on('connectionmade', function (msg) {
+            $opponent.html(msg.game.users.black)
+        })
 
         socket.on('move', function (msg) {
           console.log(msg.gameId)
