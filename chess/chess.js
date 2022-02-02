@@ -25,11 +25,6 @@
  *
  *----------------------------------------------------------------------------*/
 
-console.log("\n Start \n")
-
-
-var gameOver=0;
-
 var Chess = function (fen) {
   var BLACK = 'b'
   var WHITE = 'w'
@@ -48,7 +43,7 @@ var Chess = function (fen) {
   var DEFAULT_POSITION =
     'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
 
-  var TERMINATION_MARKERS = ['1-0', '0-1', '1/2-1/2', '*']
+  var POSSIBLE_RESULTS = ['1-0', '0-1', '1/2-1/2', '*']
 
   var PAWN_OFFSETS = {
     b: [16, 32, 17, 15],
@@ -143,7 +138,6 @@ var Chess = function (fen) {
     a2:  96, b2:  97, c2:  98, d2:  99, e2: 100, f2: 101, g2: 102, h2: 103,
     a1: 112, b1: 113, c1: 114, d1: 115, e1: 116, f1: 117, g1: 118, h1: 119
   };
-
   var ROOKS = {
     w: [
       { square: SQUARES.a1, flag: BITS.QSIDE_CASTLE },
@@ -668,7 +662,24 @@ var Chess = function (fen) {
       }
     }
 
-    return moves
+    /* return all pseudo-legal moves (this includes moves that allow the king
+     * to be captured)
+     */
+    if (!legal) {
+      return moves
+    }
+
+    /* filter out illegal moves */
+    var legal_moves = []
+    for (var i = 0, len = moves.length; i < len; i++) {
+      make_move(moves[i])
+      if (!king_attacked(us)) {
+        legal_moves.push(moves[i])
+      }
+      undo_move()
+    }
+
+    return legal_moves
   }
 
   /* convert a move from 0x88 coordinates to Standard Algebraic Notation
@@ -709,6 +720,13 @@ var Chess = function (fen) {
     }
 
     make_move(move)
+    if (in_check()) {
+      if (in_checkmate()) {
+        output += '#'
+      } else {
+        output += '+'
+      }
+    }
     undo_move()
 
     return output
@@ -769,6 +787,101 @@ var Chess = function (fen) {
     return attacked(swap_color(color), kings[color])
   }
 
+  function in_check() {
+    return king_attacked(turn)
+  }
+
+  function in_checkmate() {
+    return in_check() && generate_moves().length === 0
+  }
+
+  function in_stalemate() {
+    return !in_check() && generate_moves().length === 0
+  }
+
+  function insufficient_material() {
+    var pieces = {}
+    var bishops = []
+    var num_pieces = 0
+    var sq_color = 0
+
+    for (var i = SQUARES.a8; i <= SQUARES.h1; i++) {
+      sq_color = (sq_color + 1) % 2
+      if (i & 0x88) {
+        i += 7
+        continue
+      }
+
+      var piece = board[i]
+      if (piece) {
+        pieces[piece.type] = piece.type in pieces ? pieces[piece.type] + 1 : 1
+        if (piece.type === BISHOP) {
+          bishops.push(sq_color)
+        }
+        num_pieces++
+      }
+    }
+
+    /* k vs. k */
+    if (num_pieces === 2) {
+      return true
+    } else if (
+      /* k vs. kn .... or .... k vs. kb */
+      num_pieces === 3 &&
+      (pieces[BISHOP] === 1 || pieces[KNIGHT] === 1)
+    ) {
+      return true
+    } else if (num_pieces === pieces[BISHOP] + 2) {
+      /* kb vs. kb where any number of bishops are all on the same color */
+      var sum = 0
+      var len = bishops.length
+      for (var i = 0; i < len; i++) {
+        sum += bishops[i]
+      }
+      if (sum === 0 || sum === len) {
+        return true
+      }
+    }
+
+    return false
+  }
+
+  function in_threefold_repetition() {
+    /* TODO: while this function is fine for casual use, a better
+     * implementation would use a Zobrist key (instead of FEN). the
+     * Zobrist key would be maintained in the make_move/undo_move functions,
+     * avoiding the costly that we do below.
+     */
+    var moves = []
+    var positions = {}
+    var repetition = false
+
+    while (true) {
+      var move = undo_move()
+      if (!move) break
+      moves.push(move)
+    }
+
+    while (true) {
+      /* remove the last two fields in the FEN string, they're not needed
+       * when checking for draw by rep */
+      var fen = generate_fen().split(' ').slice(0, 4).join(' ')
+
+      /* has the position occurred three or move times */
+      positions[fen] = fen in positions ? positions[fen] + 1 : 1
+      if (positions[fen] >= 3) {
+        repetition = true
+      }
+
+      if (!moves.length) {
+        break
+      }
+      make_move(moves.pop())
+    }
+
+    return repetition
+  }
+
   function push(move) {
     history.push({
       move: move,
@@ -781,21 +894,10 @@ var Chess = function (fen) {
     })
   }
 
-  var oldboard
-
   function make_move(move) {
-    oldboard=board.slice()
     var us = turn
     var them = swap_color(us)
     push(move)
-    if(board[move.to]!=null && board[move.to].type==KING){
-      if(turn='w'){
-        gameOver=1
-      }
-      else{
-        gameOver=2
-      }
-    }
 
     board[move.to] = board[move.from]
     board[move.from] = null
@@ -815,7 +917,7 @@ var Chess = function (fen) {
     }
 
     /* if we moved the king */
-    if (board[move.to]!=null && board[move.to].type === KING) {
+    if (board[move.to].type === KING) {
       kings[board[move.to].color] = move.to
 
       /* if we castled, move the rook next to the king */
@@ -861,10 +963,6 @@ var Chess = function (fen) {
       }
     }
 
-    for (var i=0; i<8; i++){
-      othello(move.to,PIECE_OFFSETS.q[i],turn)
-    }
-
     /* if big pawn move, update the en passant square */
     if (move.flags & BITS.BIG_PAWN) {
       if (turn === 'b') {
@@ -889,38 +987,6 @@ var Chess = function (fen) {
       move_number++
     }
     turn = swap_color(turn)
-  }
-
-  function othello(square, offset, color) {
-    square+=offset
-    if (board[square]==undefined){
-      return false;
-    }
-    else if (board[square]==null){
-      return false;
-    }
-    else if (board[square].color!=color){
-      if(othello(square,offset,color)){
-        if (color=="w"){ 
-          if(board[square].type==KING){
-            gameOver=1;
-          }
-          console.log(chess.ascii())
-          board[square].color="w"
-        }
-        if (color=="b"){
-          if(board[square].type==KING){
-            gameOver=2;
-          }
-          board[square].color="b"
-        }
-        return true;
-      }
-      return false;
-    }
-    else if (board[square].color==color){
-      return true;
-    }
   }
 
   function undo_move() {
@@ -969,8 +1035,6 @@ var Chess = function (fen) {
       board[castling_to] = board[castling_from]
       board[castling_from] = null
     }
-
-    board=oldboard.slice()
 
     return move
   }
@@ -1072,28 +1136,12 @@ var Chess = function (fen) {
 
   // convert a move from Standard Algebraic Notation (SAN) to 0x88 coordinates
   function move_from_san(move, sloppy) {
-    // strip off any move decorations: e.g Nf3+?! becomes Nf3
+    // strip off any move decorations: e.g Nf3+?!
     var clean_move = stripped_san(move)
 
-    var overly_disambiguated = false
-
+    // if we're using the sloppy parser run a regex to grab piece, to, and from
+    // this should parse invalid SAN like: Pe2-e4, Rc1c4, Qf3xf7
     if (sloppy) {
-      // The sloppy parser allows the user to parse non-standard chess
-      // notations. This parser is opt-in (by specifying the
-      // '{ sloppy: true }' setting) and is only run after the Standard
-      // Algebraic Notation (SAN) parser has failed.
-      //
-      // When running the sloppy parser, we'll run a regex to grab the piece,
-      // the to/from square, and an optional promotion piece. This regex will
-      // parse common non-standard notation like: Pe2-e4, Rc1c4, Qf3xf7, f7f8q,
-      // b1c3
-
-      // NOTE: Some positions and moves may be ambiguous when using the sloppy
-      // parser. For example, in this position: 6k1/8/8/B7/8/8/8/BN4K1 w - - 0 1,
-      // the move b1c3 may be interpreted as Nc3 or B1c3 (a disambiguated
-      // bishop move). In these cases, the sloppy parser will default to the
-      // most most basic interpretation - b1c3 parses to Nc3.
-
       var matches = clean_move.match(
         /([pnbrqkPNBRQK])?([a-h][1-8])x?-?([a-h][1-8])([qrbnQRBN])?/
       )
@@ -1102,67 +1150,41 @@ var Chess = function (fen) {
         var from = matches[2]
         var to = matches[3]
         var promotion = matches[4]
-
-        if (from.length == 1) {
-          overly_disambiguated = true
-        }
-      } else {
-        // The [a-h]?[1-8]? portion of the regex below handles moves that may
-        // be overly disambiguated (e.g. Nge7 is unnecessary and non-standard
-        // when there is one legal knight move to e7). In this case, the value
-        // of 'from' variable will be a rank or file, not a square.
-        var matches = clean_move.match(
-          /([pnbrqkPNBRQK])?([a-h]?[1-8]?)x?-?([a-h][1-8])([qrbnQRBN])?/
-        )
-
-        if (matches) {
-          var piece = matches[1]
-          var from = matches[2]
-          var to = matches[3]
-          var promotion = matches[4]
-
-          if (from.length == 1) {
-            var overly_disambiguated = true
-          }
-        }
       }
     }
-
     var piece_type = infer_piece_type(clean_move)
-    var moves = generate_moves({
-      legal: false,
+    var moves = null
+    var legalMoves = generate_moves({
+      legal: true,
       piece: piece ? piece : piece_type,
     })
+    moves = legalMoves
+    if (sloppy) {
+      var illegalMoves = generate_moves({
+        legal: false,
+        piece: piece ? piece : piece_type,
+      })
+      moves = illegalMoves
+    }
 
     for (var i = 0, len = moves.length; i < len; i++) {
       // try the strict parser first, then the sloppy parser if requested
       // by the user
-      if (clean_move === stripped_san(move_to_san(moves[i], moves))) {
+      if (
+        clean_move === stripped_san(move_to_san(moves[i], legalMoves)) ||
+        (sloppy &&
+          clean_move === stripped_san(move_to_san(moves[i], illegalMoves)))
+      ) {
         return moves[i]
       } else {
-        if (sloppy && matches) {
-          // hand-compare move properties with the results from our sloppy
-          // regex
-          if (
-            (!piece || piece.toLowerCase() == moves[i].piece) &&
-            SQUARES[from] == moves[i].from &&
-            SQUARES[to] == moves[i].to &&
-            (!promotion || promotion.toLowerCase() == moves[i].promotion)
-          ) {
-            return moves[i]
-          } else if (overly_disambiguated) {
-            // SPECIAL CASE: we parsed a move string that may have an unneeded
-            // rank/file disambiguator (e.g. Nge7).  The 'from' variable will
-            var square = algebraic(moves[i].from)
-            if (
-              (!piece || piece.toLowerCase() == moves[i].piece) &&
-              SQUARES[to] == moves[i].to &&
-              (from == square[0] || from == square[1]) &&
-              (!promotion || promotion.toLowerCase() == moves[i].promotion)
-            ) {
-              return moves[i]
-            }
-          }
+        if (
+          matches &&
+          (!piece || piece.toLowerCase() == moves[i].piece) &&
+          SQUARES[from] == moves[i].from &&
+          SQUARES[to] == moves[i].to &&
+          (!promotion || promotion.toLowerCase() == moves[i].promotion)
+        ) {
+          return moves[i]
         }
       }
     }
@@ -1198,7 +1220,7 @@ var Chess = function (fen) {
   /* pretty = external move object */
   function make_pretty(ugly_move) {
     var move = clone(ugly_move)
-    move.san = move_to_san(move, generate_moves({ legal: false }))
+    move.san = move_to_san(move, generate_moves({ legal: true }))
     move.to = algebraic(move.to)
     move.from = algebraic(move.from)
 
@@ -1320,7 +1342,7 @@ var Chess = function (fen) {
           moves.push(make_pretty(ugly_moves[i]))
         } else {
           moves.push(
-            move_to_san(ugly_moves[i], generate_moves({ legal: false }))
+            move_to_san(ugly_moves[i], generate_moves({ legal: true }))
           )
         }
       }
@@ -1328,11 +1350,43 @@ var Chess = function (fen) {
       return moves
     },
 
+    in_check: function () {
+      return in_check()
+    },
+
+    in_checkmate: function () {
+      return in_checkmate()
+    },
+
+    in_stalemate: function () {
+      return in_stalemate()
+    },
+
+    in_draw: function () {
+      return (
+        half_moves >= 100 ||
+        in_stalemate() ||
+        insufficient_material() ||
+        in_threefold_repetition()
+      )
+    },
+
+    insufficient_material: function () {
+      return insufficient_material()
+    },
+
+    in_threefold_repetition: function () {
+      return in_threefold_repetition()
+    },
+
     game_over: function () {
-      if(gameOver>0){
-      return true;
-      }
-      return false;
+      return (
+        half_moves >= 100 ||
+        in_checkmate() ||
+        in_stalemate() ||
+        insufficient_material() ||
+        in_threefold_repetition()
+      )
     },
 
     validate_fen: function (fen) {
@@ -1402,15 +1456,8 @@ var Chess = function (fen) {
 
       /* pop all of history onto reversed_history */
       var reversed_history = []
-      var pgnHistory=history.slice()
-
-      console.log(pgnHistory[0])
-
-      while (pgnHistory.length > 0) {
-        i=pgnHistory.length-1
-        reversed_history.push(pgnHistory[i].move)
-        pgnHistory.pop()
-        i--
+      while (history.length > 0) {
+        reversed_history.push(undo_move())
       }
 
       var moves = []
@@ -1678,40 +1725,44 @@ var Chess = function (fen) {
       moves = moves.join(',').replace(/,,+/g, ',').split(',')
       var move = ''
 
-      var result = ''
-
-      for (var half_move = 0; half_move < moves.length; half_move++) {
+      for (var half_move = 0; half_move < moves.length - 1; half_move++) {
         var comment = decode_comment(moves[half_move])
         if (comment !== undefined) {
           comments[generate_fen()] = comment
           continue
         }
-
         move = move_from_san(moves[half_move], sloppy)
 
-        /* invalid move */
+        /* move not possible! (don't clear the board to examine to show the
+         * latest valid position)
+         */
         if (move == null) {
-          /* was the move an end of game marker */
-          if (TERMINATION_MARKERS.indexOf(moves[half_move]) > -1) {
-            result = moves[half_move]
-          } else {
-            return false
-          }
+          return false
         } else {
-          /* reset the end of game marker if making a valid move */
-          result = ''
           make_move(move)
         }
       }
 
-      /* Per section 8.2.6 of the PGN spec, the Result tag pair must match
-       * match the termination marker. Only do this when headers are present,
-       * but the result tag is missing
-       */
-      if (result && Object.keys(header).length && !header['Result']) {
-        set_header(['Result', result])
+      comment = decode_comment(moves[moves.length - 1])
+      if (comment !== undefined) {
+        comments[generate_fen()] = comment
+        moves.pop()
       }
 
+      /* examine last move */
+      move = moves[moves.length - 1]
+      if (POSSIBLE_RESULTS.indexOf(move) > -1) {
+        if (has_keys(header) && typeof header.Result === 'undefined') {
+          set_header(['Result', move])
+        }
+      } else {
+        move = move_from_san(move, sloppy)
+        if (move == null) {
+          return false
+        } else {
+          make_move(move)
+        }
+      }
       return true
     },
 
@@ -1775,13 +1826,8 @@ var Chess = function (fen) {
        * move is made
        */
       var pretty_move = make_pretty(move_obj)
+
       make_move(move_obj)
-      if(gameOver==1){
-        console.log("White wins")
-      }
-      else if(gameOver==2){
-        console.log("Black wins")
-      }
 
       return pretty_move
     },
@@ -1837,7 +1883,7 @@ var Chess = function (fen) {
         if (verbose) {
           move_history.push(make_pretty(move))
         } else {
-          move_history.push(move_to_san(move, generate_moves({ legal: false })))
+          move_history.push(move_to_san(move, generate_moves({ legal: true })))
         }
         make_move(move)
       }
@@ -1877,12 +1923,6 @@ var Chess = function (fen) {
   }
 }
 
-const chess = new Chess()
-
-
-console.log(chess.ascii())
-
-
 /* export Chess object if using node or any other CommonJS compatible
  * environment */
 if (typeof exports !== 'undefined') exports.Chess = Chess
@@ -1891,7 +1931,3 @@ if (typeof define !== 'undefined')
   define(function () {
     return Chess
   })
-
-
-
-  
