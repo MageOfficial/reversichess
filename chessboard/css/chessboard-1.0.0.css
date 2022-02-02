@@ -5,7 +5,7 @@
 }
 
 .board-b72b1 {
-  border: 2px solid #404040;
+  border: 3px solid #404040;
   box-sizing: content-box;
   touch-action: none;
 }
@@ -52,4 +52,25 @@
 .numeric-fc462 {
   top: 2px;
   left: 2px;
+}
+
+.numeric-red {
+  font-weight: 900;
+  font-size: 15px;
+  top: 2px;
+  right: 2px;
+  color: #15ff00;
+}
+.numeric-blue {
+  font-weight: bold;
+  top: 2px;
+  right: 2px;
+  color: #002fff;
+}
+.numeric-neutral {
+  font-weight: 900;
+  font-size: 15px;
+  top: 2px;
+  right: 2px;
+  color: #111111;
 }

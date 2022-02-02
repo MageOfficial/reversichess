@@ -50,7 +50,9 @@
   CSS['sparePiecesTop'] = 'spare-pieces-top-4028b'
   CSS['square'] = 'square-55d63'
   CSS['white'] = 'white-1e1d7'
-
+  CSS['numericred'] = 'numeric-red'
+  CSS['numericblue'] = 'numeric-blue'
+  CSS['numericneutral'] = 'numeric-neutral'
   // ---------------------------------------------------------------------------
   // Misc Util Functions
   // ---------------------------------------------------------------------------
@@ -576,7 +578,7 @@
     // default piece theme is wikipedia
     if (!config.hasOwnProperty('pieceTheme') ||
         (!isString(config.pieceTheme) && !isFunction(config.pieceTheme))) {
-      config.pieceTheme = 'img/chesspieces/wikipedia/{piece}.png'
+      config.pieceTheme = 'chessboard/img/chesspieces/wikipedia/{piece}.png'
     }
 
     // animation speeds
@@ -822,6 +824,7 @@
             'style="width:' + squareSize + 'px;height:' + squareSize + 'px;" ' +
             'id="' + squareElsIds[square] + '" ' +
             'data-square="' + square + '">'
+            html += '<div id="propertyVal'+(j+i*16)+'"class="{notation} {numericneutral}">' + 0 + '</div>'
 
           if (config.showNotation) {
             // alpha notation
