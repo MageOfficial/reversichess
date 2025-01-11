@@ -17,7 +17,6 @@ io.on('connection', function (socket) {
     socket.on('move', function (msg) {
         socket.broadcast.emit('move', msg);
         //activeGames[msg.gameId].board = msg.board;
-        console.log(msg);
     });
 
     socket.on('login', function (userId) {
@@ -76,15 +75,10 @@ io.on('connection', function (socket) {
     });
 
     socket.on('opponentjoin', function (gameId) {
-        console.log('opponent joined: ' + gameId);
-        console.log(activeGames)
-
-
         socket.gameId = gameId;
 
         var game = activeGames[gameId];
 
-        console.log(gameId)
         game.users.black = socket.userId;
 
         lobbyUsers[game.users.black].emit('joingame', { game: game, color: 'b' });
